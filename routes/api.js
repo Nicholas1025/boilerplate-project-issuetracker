@@ -12,20 +12,17 @@ module.exports = function (app) {
         const issues = await Issue.find(query);
         res.json(issues);
       } catch (err) {
-        console.error('❌ Error in GET:', err);
-        res.status(500).json([]);
+        res.json([]);
       }
     })
-
+ 
     .post(async function (req, res) {
       try {
         const project = req.params.project;
         const { issue_title, issue_text, created_by, assigned_to, status_text } = req.body;
-
         if (!issue_title || !issue_text || !created_by) {
-          return res.json({ error: 'required field(s) missing' });
+          return res.send('required field(s) missing');
         }
-
         const newIssue = new Issue({
           issue_title,
           issue_text,
@@ -37,39 +34,33 @@ module.exports = function (app) {
           updated_on: new Date(),
           open: true
         });
-
         const savedIssue = await newIssue.save();
         res.json(savedIssue);
       } catch (err) {
-        console.error('❌ Error in POST:', err);
-        res.status(500).json({ error: 'server error' });
+        res.send('server error');
       }
     })
-
+ 
     .put(async function (req, res) {
       try {
         const { _id, ...fields } = req.body;
         if (!_id) return res.json({ error: 'missing _id' });
 
-        if (!mongoose.Types.ObjectId.isValid(_id)) {
-          return res.json({ error: 'could not update', _id });
-        }
-
         const hasUpdates = Object.keys(fields).some(key => key !== '_id' && fields[key] !== '');
         if (!hasUpdates) return res.json({ error: 'no update field(s) sent', _id });
 
-        const updates = { ...fields, updated_on: new Date() };
-
-        const updated = await Issue.findByIdAndUpdate(_id, updates, { new: true });
+        if (!mongoose.Types.ObjectId.isValid(_id)) {
+          return res.json({ error: 'could not update', _id });
+        }
+        fields.updated_on = new Date();
+        const updated = await Issue.findByIdAndUpdate(_id, fields, { new: true });
         if (!updated) return res.json({ error: 'could not update', _id });
-
-        res.json({ result: 'successfully updated', _id });
+        res.json({ result: 'success', _id });
       } catch (err) {
-        console.error('❌ Error in PUT:', err);
         res.json({ error: 'could not update', _id: req.body._id });
       }
     })
-
+ 
     .delete(async function (req, res) {
       try {
         const { _id } = req.body;
@@ -78,13 +69,10 @@ module.exports = function (app) {
         if (!mongoose.Types.ObjectId.isValid(_id)) {
           return res.json({ error: 'could not delete', _id });
         }
-
         const deleted = await Issue.findByIdAndDelete(_id);
         if (!deleted) return res.json({ error: 'could not delete', _id });
-
-        res.json({ result: 'successfully deleted', _id });
+        res.json({ result: 'success', _id });
       } catch (err) {
-        console.error('❌ Error in DELETE:', err);
         res.json({ error: 'could not delete', _id: req.body._id });
       }
     });
