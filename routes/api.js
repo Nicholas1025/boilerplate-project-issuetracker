@@ -1,4 +1,5 @@
 'use strict';
+
 const Issue = require('../models/issue.js');
 const mongoose = require('mongoose');
 
@@ -8,8 +9,8 @@ module.exports = function (app) {
     .get(async function (req, res) {
       try {
         const project = req.params.project;
-        const query = { project, ...req.query };
-        const issues = await Issue.find(query);
+        const filter = { project, ...req.query };
+        const issues = await Issue.find(filter).select('-__v -project');
         res.json(issues);
       } catch (err) {
         res.status(500).json({ error: 'server error' });
@@ -38,7 +39,12 @@ module.exports = function (app) {
         });
 
         const savedIssue = await newIssue.save();
-        res.json(savedIssue);
+
+        const response = savedIssue.toObject();
+        delete response.__v;
+        delete response.project;
+
+        res.json(response);
       } catch (err) {
         res.status(500).json({ error: 'server error' });
       }
@@ -47,41 +53,40 @@ module.exports = function (app) {
     .put(async function (req, res) {
       try {
         const { _id, ...fields } = req.body;
+
         if (!_id) return res.json({ error: 'missing _id' });
+        if (!mongoose.Types.ObjectId.isValid(_id)) return res.json({ error: 'could not update', _id });
 
-        if (!mongoose.Types.ObjectId.isValid(_id)) {
-          return res.json({ error: 'could not update', _id });
-        }
+        const updateFields = Object.fromEntries(
+          Object.entries(fields).filter(([k, v]) => v !== '' && k !== '_id')
+        );
 
-        const hasUpdates = Object.keys(fields).some(key => key !== '_id' && fields[key] !== '');
-        if (!hasUpdates) return res.json({ error: 'no update field(s) sent', _id });
+        if (Object.keys(updateFields).length === 0) return res.json({ error: 'no update field(s) sent', _id });
 
-        const updates = { ...fields, updated_on: new Date() };
+        updateFields.updated_on = new Date();
+        const updated = await Issue.findByIdAndUpdate(_id, updateFields, { new: true });
 
-        const updated = await Issue.findByIdAndUpdate(_id, updates, { new: true });
         if (!updated) return res.json({ error: 'could not update', _id });
 
-        res.json({ result: 'successfully updated', '_id': _id });
+        res.json({ result: 'successfully updated', _id });
       } catch (err) {
-        res.json({ error: 'could not update', '_id': req.body._id });
+        res.json({ error: 'could not update', _id: req.body._id });
       }
     })
 
     .delete(async function (req, res) {
       try {
         const { _id } = req.body;
-        if (!_id) return res.json({ error: 'missing _id' });
 
-        if (!mongoose.Types.ObjectId.isValid(_id)) {
-          return res.json({ error: 'could not delete', _id });
-        }
+        if (!_id) return res.json({ error: 'missing _id' });
+        if (!mongoose.Types.ObjectId.isValid(_id)) return res.json({ error: 'could not delete', _id });
 
         const deleted = await Issue.findByIdAndDelete(_id);
         if (!deleted) return res.json({ error: 'could not delete', _id });
 
-        res.json({ result: 'successfully deleted', '_id': _id });
+        res.json({ result: 'successfully deleted', _id });
       } catch (err) {
-        res.json({ error: 'could not delete', '_id': req.body._id });
+        res.json({ error: 'could not delete', _id: req.body._id });
       }
     });
 };
